@@ -74,12 +74,37 @@ class Obstacle:
 
 
 class Car(Obstacle):
-    """A car obstacle on roads."""
+    """Base car obstacle on roads."""
+
+    def __init__(self, x, y, speed, direction, width=1, color=None):
+        """Initialize a car with random color if not specified."""
+        if color is None:
+            color = random.choice([COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE])
+        super().__init__(x, y, speed, direction, width=width, color=color)
+
+
+class Truck(Car):
+    """A large truck - 3 blocks wide."""
 
     def __init__(self, x, y, speed, direction):
-        """Initialize a car with random color."""
-        color = random.choice([COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE])
-        super().__init__(x, y, speed, direction, width=1, color=color)
+        """Initialize a truck."""
+        super().__init__(x, y, speed, direction, width=3, color=COLOR_CAR_ORANGE)
+
+
+class Sedan(Car):
+    """A medium sedan - 2 blocks wide."""
+
+    def __init__(self, x, y, speed, direction):
+        """Initialize a sedan."""
+        super().__init__(x, y, speed, direction, width=2, color=COLOR_CAR_BLUE)
+
+
+class SmartCar(Car):
+    """A small smart car - 1 block wide."""
+
+    def __init__(self, x, y, speed, direction):
+        """Initialize a smart car."""
+        super().__init__(x, y, speed, direction, width=1, color=COLOR_CAR_RED)
 
 
 class Log(Obstacle):
@@ -229,7 +254,7 @@ class ObstacleManager:
             del self.train_tracks[row_y]
         
         if terrain_type == TERRAIN_ROAD:
-            # Generate cars
+            # Generate cars of different types
             num_cars = random.randint(*CARS_PER_ROW)
             speed = random.uniform(CAR_SPEED_MIN, CAR_SPEED_MAX)
             direction = random.choice([-1, 1])
@@ -241,7 +266,13 @@ class ObstacleManager:
                 if direction < 0:
                     x = GRID_WIDTH - x
                 
-                car = Car(x, row_y, speed, direction)
+                # Randomly choose car type
+                car_type = random.choices(
+                    [SmartCar, Sedan, Truck],
+                    weights=[0.4, 0.4, 0.2],  # Smart cars and sedans more common, trucks rarer
+                    k=1
+                )[0]
+                car = car_type(x, row_y, speed, direction)
                 self.obstacles.append(car)
         
         elif terrain_type == TERRAIN_RIVER:
