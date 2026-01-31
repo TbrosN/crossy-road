@@ -7,8 +7,25 @@ from crossy.config import (
     CARS_PER_ROW, LOGS_PER_ROW, TREES_PER_ROW,
     COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE, COLOR_TREE,
     TRAIN_SPEED, TRAIN_WIDTH, TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX,
-    TRAIN_WARNING_TIME, COLOR_TRAIN
+    TRAIN_WARNING_TIME, COLOR_TRAIN, TOTAL_ROWS
 )
+
+
+def get_progress(row_y):
+    """
+    Calculate progress based on row number.
+    
+    Progress goes from 0.0 (start, high row numbers) to 1.0 (furthest point, row 0).
+    
+    Args:
+        row_y: Row Y coordinate
+    
+    Returns:
+        float: Progress value between 0.0 and 1.0
+    """
+    playable_rows = TOTAL_ROWS - 5  # Bottom 5 rows are safe zone
+    progress = 1.0 - (row_y / playable_rows)
+    return max(0.0, min(1.0, progress))
 
 
 class Obstacle:
@@ -146,38 +163,50 @@ class Train(Obstacle):
 class TrainTrack:
     """Manages train spawning for a single train track row."""
 
-    def __init__(self, row_y):
+    def __init__(self, row_y, progress=0.5):
         """
-        Initialize a train track.
+        Initialize a train track with difficulty scaling.
         
         Args:
             row_y: Y coordinate of this train track
+            progress: Game progress (0.0 to 1.0) for difficulty scaling
         """
         self.row_y = row_y
+        self.progress = progress
         self.direction = random.choice([-1, 1])  # Train direction
         self.train = None  # Current active train (if any)
         
+        # Scale spawn intervals with progress
+        # Early (low progress): longer intervals (6-12s), Late: shorter intervals (4-8s)
+        interval_scale = 1.0 - (0.3 * progress)  # 1.0 -> 0.7
+        self.spawn_interval_min = TRAIN_SPAWN_INTERVAL_MIN * interval_scale + 1.0  # 6s -> 4.5s
+        self.spawn_interval_max = TRAIN_SPAWN_INTERVAL_MAX * interval_scale + 2.0  # 12s -> 9s
+        
         # Randomize initial state to make tracks feel independent
-        # 30% chance: spawn a train immediately (already on track)
-        # 30% chance: show warning (train coming soon)
-        # 40% chance: normal random interval
+        # Early game: less aggressive initial spawns
+        # 10-30% chance: spawn a train immediately (scales with progress)
+        # 10-30% chance: show warning (scales with progress)
+        # 40-80% chance: normal random interval
+        immediate_spawn_chance = 0.10 + 0.20 * progress  # 10% -> 30%
+        warning_chance = 0.10 + 0.20 * progress  # 10% -> 30%
+        
         roll = random.random()
-        if roll < 0.3:
+        if roll < immediate_spawn_chance:
             # Spawn train immediately at a random position on the track
             if self.direction > 0:
                 x = random.uniform(-TRAIN_WIDTH, GRID_WIDTH * 0.3)
             else:
                 x = random.uniform(GRID_WIDTH * 0.7, GRID_WIDTH + TRAIN_WIDTH)
             self.train = Train(x, row_y, self.direction)
-            self.time_until_next_train = random.uniform(TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX)
+            self.time_until_next_train = random.uniform(self.spawn_interval_min, self.spawn_interval_max)
             self.warning = False
-        elif roll < 0.6:
+        elif roll < immediate_spawn_chance + warning_chance:
             # Start with warning active (train coming very soon)
             self.time_until_next_train = random.uniform(0.5, TRAIN_WARNING_TIME)
             self.warning = True
         else:
             # Normal random interval
-            self.time_until_next_train = random.uniform(TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX)
+            self.time_until_next_train = random.uniform(self.spawn_interval_min, self.spawn_interval_max)
             self.warning = False
 
     def update(self, dt):
@@ -195,8 +224,8 @@ class TrainTrack:
             if (self.direction > 0 and self.train.x > GRID_WIDTH + TRAIN_WIDTH) or \
                (self.direction < 0 and self.train.x < -TRAIN_WIDTH):
                 self.train = None
-                # Schedule next train
-                self.time_until_next_train = random.uniform(TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX)
+                # Schedule next train using scaled intervals
+                self.time_until_next_train = random.uniform(self.spawn_interval_min, self.spawn_interval_max)
                 self.warning = False
         
         # If no train, count down to next spawn
@@ -237,7 +266,11 @@ class ObstacleManager:
 
     def generate_for_row(self, row_y, terrain_type):
         """
-        Generate obstacles for a specific row.
+        Generate obstacles for a specific row with difficulty scaling.
+        
+        Obstacle density and speed scale with progress:
+        - Early game: fewer, slower obstacles
+        - Late game: more, faster obstacles
         
         Args:
             row_y: Y coordinate of the row
@@ -253,10 +286,21 @@ class ObstacleManager:
         if row_y in self.train_tracks:
             del self.train_tracks[row_y]
         
+        # Get progress for difficulty scaling
+        progress = get_progress(row_y)
+        
         if terrain_type == TERRAIN_ROAD:
-            # Generate cars of different types
-            num_cars = random.randint(*CARS_PER_ROW)
-            speed = random.uniform(CAR_SPEED_MIN, CAR_SPEED_MAX)
+            # Scale car count with progress
+            # Early: 1-2 cars, Late: 2-5 cars
+            min_cars = 1 + int(progress * 1)  # 1 -> 2
+            max_cars = 2 + int(progress * 3)  # 2 -> 5
+            num_cars = random.randint(min_cars, max_cars)
+            
+            # Scale speed with progress
+            # Early: slower cars (0.8-1.5), Late: faster (1.0-3.0)
+            speed_min = CAR_SPEED_MIN * (0.8 + 0.2 * progress)
+            speed_max = CAR_SPEED_MIN + (CAR_SPEED_MAX - CAR_SPEED_MIN) * (0.5 + 0.5 * progress)
+            speed = random.uniform(speed_min, speed_max)
             direction = random.choice([-1, 1])
             
             for i in range(num_cars):
@@ -266,19 +310,30 @@ class ObstacleManager:
                 if direction < 0:
                     x = GRID_WIDTH - x
                 
-                # Randomly choose car type
+                # Randomly choose car type (more trucks at higher progress)
+                truck_weight = 0.1 + 0.2 * progress  # 0.1 -> 0.3
+                sedan_weight = 0.4
+                smart_weight = 0.5 - 0.1 * progress  # 0.5 -> 0.4
+                
                 car_type = random.choices(
                     [SmartCar, Sedan, Truck],
-                    weights=[0.4, 0.4, 0.2],  # Smart cars and sedans more common, trucks rarer
+                    weights=[smart_weight, sedan_weight, truck_weight],
                     k=1
                 )[0]
                 car = car_type(x, row_y, speed, direction)
                 self.obstacles.append(car)
         
         elif terrain_type == TERRAIN_RIVER:
-            # Generate logs
-            num_logs = random.randint(*LOGS_PER_ROW)
-            speed = random.uniform(LOG_SPEED_MIN, LOG_SPEED_MAX)
+            # Scale log count inversely with progress (fewer logs = harder)
+            # Early: 3-4 logs (easier), Late: 2-3 logs (harder)
+            min_logs = max(2, 3 - int(progress * 1))  # 3 -> 2
+            max_logs = max(3, 4 - int(progress * 1))  # 4 -> 3
+            num_logs = random.randint(min_logs, max_logs)
+            
+            # Scale speed with progress (faster = harder)
+            speed_min = LOG_SPEED_MIN * (0.8 + 0.4 * progress)
+            speed_max = LOG_SPEED_MIN + (LOG_SPEED_MAX - LOG_SPEED_MIN) * (0.6 + 0.4 * progress)
+            speed = random.uniform(speed_min, speed_max)
             direction = random.choice([-1, 1])
             
             for i in range(num_logs):
@@ -292,8 +347,11 @@ class ObstacleManager:
                 self.obstacles.append(log)
         
         elif terrain_type == TERRAIN_GRASS:
-            # Generate trees
-            num_trees = random.randint(*TREES_PER_ROW)
+            # Scale tree count with progress (more trees = harder navigation)
+            # Early: 0-2 trees, Late: 0-4 trees
+            min_trees = 0
+            max_trees = 2 + int(progress * 2)  # 2 -> 4
+            num_trees = random.randint(min_trees, max_trees)
             
             if num_trees > 0:
                 # Generate random positions for trees (avoid duplicates)
@@ -304,7 +362,7 @@ class ObstacleManager:
         
         elif terrain_type == TERRAIN_TRAIN:
             # Create a train track for this row
-            train_track = TrainTrack(row_y)
+            train_track = TrainTrack(row_y, progress)
             self.train_tracks[row_y] = train_track
             
             # If the train track already has a train, add it to obstacles
