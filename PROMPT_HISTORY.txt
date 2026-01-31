@@ -1,0 +1,39 @@
+I want to make a clone of crossy road. Please make a high level plan for an mvp. Let's start by coming up with a reasonable tech stack; let's se uv as the package manager.
+
+how does pygame-ce differ form plain pygame?
+
+ok great, one emphasis for the plan: Let's not worry about graphics until the end; for now, just use rects for everything and don't worry about tilting the screen and doing the pseudo-3d thing crossy road does. Just a flat 2d game would be great to start.
+
+let's implement the MVP please
+
+let's not worry about scrolling yet, that's overly complex for our mvp.
+
+there's a problem with our collision detection for the logs/water. Right now, it is impossible for the player to jump onto a log because the logs are the same width as the player, so they need to pixel PERFECTLY line up the jump to not die. We should make the logs wider and potentially a bit more forgiving if you are mostly on the log and not the water.
+
+@src/crossy/obstacles.py to make this more like crossy road, let's add trees on the grass. Colliding with them doesnt end the player, but the player is simply prevented from moving onto a cell that contains a tree.
+
+@src/crossy/obstacles.py:185-210 this is a bit off; when a car gets close to me, it gives me game over when there is still a visible gap between me and the car. Let's please fix the logic here. For debugging, let's draw the hitbox around the player and all obstacles to visualize it; make these hitbox outlines only show when a debug flag is set to true
+
+great thanks, it looks like the rectangles we see are a slight bit wider than the actual hitboxes, can we please fix that?
+
+let's actually get rid of the margins entirely, we dont need those. I.e., no visual defalting: the hitboxes and rectangles we see should be identical in dimension, without applying any inflation etc
+
+to make this more like crossy road, the game should automatically scroll, so that if the user waits too long on a safe square, they will eventually be scrolled out of view. When this happens, the user should get 'game over'.
+
+when scrolling, the bottom row is disappearing before the scroll, making the row of the current player get emptied. Can we please avoid unrendering the rows too early (or at all)
+
+@src/crossy/obstacles.py let's also add train track rows: these have train tracks, and once in a while, a train comes on the tracks which is long and covers the whole tracks for a couple seconds. This should mirror the actual mechanic in crossy road
+
+the trains shouldnt all be synced; they should be independent random about train arrivals
+
+@src/crossy/obstacles.py let's add different kinds of cars: there should be trucks which are 3 blocks wide, sedans are 2 blocks wide, and then smart cars are 1 block wide
+
+@src/crossy/main.py this game is really hard right now: compared to real crossy road, we have a lot of train tracks, and difficulty doesnt ramp-up, it just starts already hard. lets please adjust the probabilities to more closely mirror crossy road, and make the game progressively more difficult by increasing the probability of trains, roads, and water as the game progresses (say, based on current score)
+
+in the initial game, we have too much grass, it should be more like 50/50.
+
+@src/crossy/terrain.py  @src/crossy/obstacles.py i want a greater probability of spawning things in clusters: it should be common to have a 1-3 rows of the same type at a time, and as the game ramps up, clusters of dangerous row types should get larger
+
+the clusters of roads are too big too early; right at the start (<10 points), I already had 5 roads in a row. Let's please adjust that and make it more reasonable.
+
+@src/crossy/config.py:17 @src/crossy/game.py @src/crossy/main.py for scrolling, if the user gets above a certain y-value on the screen (say, 1/4 fo the way up from the bottom), we should more quickly scroll down to get them reasonably low (back to the 1/4 threshold perhaps). Then, let's also decrease the automatic scrolling speed so it isnt too hard
