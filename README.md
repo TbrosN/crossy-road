@@ -1,6 +1,6 @@
 # Crossy Road Clone
 
-A simple Crossy Road clone built with Python and Pygame-ce.
+A simple Crossy Road clone built with Python and Pygame-ce. This was built with AI for 15-113 at CMU on a 1-hour timer.
 
 ## Setup
 
