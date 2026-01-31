@@ -30,25 +30,30 @@ class TerrainManager:
         self.rows = []
         self._generate_terrain()
 
-    def _generate_terrain_type(self, row_num):
+    def _get_progress(self, row_num):
         """
-        Randomly generate a terrain type with weighted probabilities.
-        
-        Difficulty ramps up based on row number (lower row = further in game = harder).
-        Progress goes from 0.0 (start) to 1.0 (furthest point).
-        
-        Real Crossy Road starts easy with mostly grass, then gradually introduces
-        roads, water, and finally train tracks.
+        Calculate progress based on row number.
         
         Args:
             row_num: The row number (lower = further progress)
+        
+        Returns:
+            float: Progress from 0.0 (start) to 1.0 (furthest point)
         """
-        # Calculate progress: 0.0 at start (high row numbers), 1.0 at furthest point (row 0)
-        # Safe zone is last 5 rows, so progress starts from TOTAL_ROWS - 6
         playable_rows = TOTAL_ROWS - 5
         progress = 1.0 - (row_num / playable_rows)
-        progress = max(0.0, min(1.0, progress))  # Clamp to [0, 1]
+        return max(0.0, min(1.0, progress))
+
+    def _get_terrain_probabilities(self, progress):
+        """
+        Get terrain type probabilities based on progress.
         
+        Args:
+            progress: Game progress from 0.0 to 1.0
+        
+        Returns:
+            dict: Mapping of terrain type to probability
+        """
         # Base probabilities (early game - balanced start)
         # Grass: 50%, Road: 50%, River: 0%, Train: 0%
         grass_prob = 0.50
@@ -57,52 +62,154 @@ class TerrainManager:
         train_prob = 0.0
         
         # As progress increases, shift probabilities toward harder terrain
-        # At max progress (1.0):
-        # Grass: 30%, Road: 35%, River: 25%, Train: 10%
         if progress > 0.0:
             # Gradually introduce rivers after 15% progress
             if progress > 0.15:
-                river_intro = min(1.0, (progress - 0.15) / 0.35)  # Ramps from 0 to 1 over progress 0.15-0.50
+                river_intro = min(1.0, (progress - 0.15) / 0.35)
                 river_prob = 0.25 * river_intro
             
             # Gradually introduce trains after 35% progress
             if progress > 0.35:
-                train_intro = min(1.0, (progress - 0.35) / 0.40)  # Ramps from 0 to 1 over progress 0.35-0.75
+                train_intro = min(1.0, (progress - 0.35) / 0.40)
                 train_prob = 0.10 * train_intro
             
-            # Road stays around 35-50%, decreasing slightly as rivers/trains appear
-            # This keeps road common throughout while making room for other terrain
-            road_prob = 0.50 - (0.15 * progress)  # 50% -> 35%
+            # Road decreases slightly as rivers/trains appear
+            road_prob = 0.50 - (0.15 * progress)
             
-            # Grass decreases to make room for other terrain types
+            # Grass fills the remainder
             grass_prob = 1.0 - road_prob - river_prob - train_prob
         
-        # Generate terrain based on probabilities
+        return {
+            TERRAIN_GRASS: grass_prob,
+            TERRAIN_ROAD: road_prob,
+            TERRAIN_RIVER: river_prob,
+            TERRAIN_TRAIN: train_prob
+        }
+
+    def _pick_terrain_type(self, probabilities):
+        """
+        Pick a terrain type based on probabilities.
+        
+        Args:
+            probabilities: Dict mapping terrain type to probability
+        
+        Returns:
+            str: Selected terrain type
+        """
         roll = random.random()
         cumulative = 0.0
         
-        cumulative += grass_prob
-        if roll < cumulative:
-            return TERRAIN_GRASS
+        for terrain_type, prob in probabilities.items():
+            cumulative += prob
+            if roll < cumulative:
+                return terrain_type
         
-        cumulative += road_prob
-        if roll < cumulative:
-            return TERRAIN_ROAD
+        # Fallback (shouldn't happen if probabilities sum to 1)
+        return TERRAIN_GRASS
+
+    def _get_cluster_size(self, terrain_type, progress):
+        """
+        Get cluster size for a terrain type based on progress.
         
-        cumulative += river_prob
-        if roll < cumulative:
-            return TERRAIN_RIVER
+        Dangerous terrain clusters get larger as difficulty increases,
+        but stay conservative to avoid overwhelming the player.
         
-        return TERRAIN_TRAIN
+        Args:
+            terrain_type: The type of terrain
+            progress: Game progress from 0.0 to 1.0
+        
+        Returns:
+            int: Number of rows in this cluster
+        """
+        if terrain_type == TERRAIN_GRASS:
+            # Grass clusters: 1-2 rows consistently
+            return random.randint(1, 2)
+        
+        elif terrain_type == TERRAIN_ROAD:
+            # Road clusters: very conservative scaling
+            # Early (progress < 0.3): always 1 row
+            # Mid (0.3-0.6): 1-2 rows
+            # Late (> 0.6): 1-3 rows
+            if progress < 0.3:
+                return 1
+            elif progress < 0.6:
+                return random.randint(1, 2)
+            else:
+                return random.randint(1, 3)
+        
+        elif terrain_type == TERRAIN_RIVER:
+            # River clusters: similar to roads
+            # Early: 1 row, Mid: 1-2, Late: 1-3
+            if progress < 0.3:
+                return 1
+            elif progress < 0.6:
+                return random.randint(1, 2)
+            else:
+                return random.randint(1, 3)
+        
+        elif terrain_type == TERRAIN_TRAIN:
+            # Train clusters: always 1 (trains are deadly)
+            return 1
+        
+        return 1
 
     def _generate_terrain(self):
-        """Generate all terrain rows upfront with progressive difficulty."""
-        for i in range(TOTAL_ROWS):
-            if i >= TOTAL_ROWS - 5:
-                # Bottom few rows are safe grass (starting area)
-                self.rows.append(TerrainRow(i, TERRAIN_GRASS))
-            else:
-                self.rows.append(TerrainRow(i, self._generate_terrain_type(i)))
+        """
+        Generate all terrain rows upfront with progressive difficulty.
+        
+        Terrain is generated in clusters, with grass breaks between
+        dangerous terrain types to prevent overwhelming sequences.
+        """
+        # Start with safe grass rows at the bottom
+        safe_rows = 5
+        for i in range(TOTAL_ROWS - safe_rows, TOTAL_ROWS):
+            self.rows.append(TerrainRow(i, TERRAIN_GRASS))
+        
+        # Generate terrain in clusters from bottom to top (high row numbers to low)
+        current_row = TOTAL_ROWS - safe_rows - 1
+        last_terrain_type = TERRAIN_GRASS  # Track previous terrain for spacing
+        
+        while current_row >= 0:
+            progress = self._get_progress(current_row)
+            probabilities = self._get_terrain_probabilities(progress)
+            terrain_type = self._pick_terrain_type(probabilities)
+            
+            # If we just had dangerous terrain and picked dangerous terrain again,
+            # insert a grass break first (higher chance at low progress)
+            is_dangerous = terrain_type in (TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_TRAIN)
+            was_dangerous = last_terrain_type in (TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_TRAIN)
+            
+            if is_dangerous and was_dangerous:
+                # Insert grass break between dangerous terrain clusters
+                # Early game: always insert grass break
+                # Late game: 50% chance of grass break
+                grass_break_chance = 1.0 - (0.5 * progress)  # 100% -> 50%
+                if random.random() < grass_break_chance:
+                    # Insert 1-2 rows of grass
+                    grass_size = random.randint(1, 2)
+                    grass_size = min(grass_size, current_row + 1)
+                    for i in range(grass_size):
+                        row_num = current_row - i
+                        if row_num >= 0:
+                            self.rows.append(TerrainRow(row_num, TERRAIN_GRASS))
+                    current_row -= grass_size
+                    last_terrain_type = TERRAIN_GRASS
+                    continue
+            
+            # Generate the terrain cluster
+            cluster_size = self._get_cluster_size(terrain_type, progress)
+            cluster_size = min(cluster_size, current_row + 1)
+            
+            for i in range(cluster_size):
+                row_num = current_row - i
+                if row_num >= 0:
+                    self.rows.append(TerrainRow(row_num, terrain_type))
+            
+            current_row -= cluster_size
+            last_terrain_type = terrain_type
+        
+        # Sort rows by row_num so they're in correct order
+        self.rows.sort(key=lambda r: r.row_num)
 
     def get_terrain_at(self, grid_y):
         """
