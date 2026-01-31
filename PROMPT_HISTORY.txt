@@ -1,3 +1,10 @@
+--SUMMARY--
+I used Cursor with Opus 4.5 and Sonnet 4.5.
+I spent time at the beginning making a plan for an MVP, being careful about tech stack
+and focusing on just the core features. I ended up using pygame-ce and uv for package management.
+
+--PROMPTS--
+
 I want to make a clone of crossy road. Please make a high level plan for an mvp. Let's start by coming up with a reasonable tech stack; let's se uv as the package manager.
 
 how does pygame-ce differ form plain pygame?
