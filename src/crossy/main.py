@@ -5,11 +5,11 @@ from crossy.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, CELL_SIZE,
     GRID_WIDTH, GRID_HEIGHT,
     COLOR_BACKGROUND, COLOR_GRASS, COLOR_ROAD, COLOR_RIVER,
-    COLOR_PLAYER, COLOR_TEXT,
+    COLOR_PLAYER, COLOR_TEXT, COLOR_TREE,
     TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER
 )
 from crossy.game import GameState
-from crossy.obstacles import Car, Log
+from crossy.obstacles import Car, Log, Tree
 
 
 class Game:
@@ -88,6 +88,7 @@ class Game:
         instructions = [
             "Use ARROW KEYS to move",
             "Avoid cars, ride logs across rivers",
+            "Trees block your path on grass",
             "",
             "Press SPACE to start"
         ]
@@ -155,6 +156,23 @@ class Game:
                 # Slightly smaller rect for visual separation
                 rect = rect.inflate(-4, -4)
                 pygame.draw.rect(self.screen, obstacle.color, rect)
+        
+        # Render trees
+        for tree in self.game_state.obstacle_manager.trees:
+            if camera_start_row <= tree.y < camera_end_row:
+                screen_y = (tree.y - camera_start_row) * CELL_SIZE
+                rect = pygame.Rect(
+                    offset_x + tree.x * CELL_SIZE,
+                    offset_y + screen_y,
+                    CELL_SIZE,
+                    CELL_SIZE
+                )
+                
+                # Draw tree as a circle for better visual
+                center_x = rect.centerx
+                center_y = rect.centery
+                radius = CELL_SIZE // 3
+                pygame.draw.circle(self.screen, tree.color, (center_x, center_y), radius)
         
         # Render player
         screen_y = (self.game_state.player.y - camera_start_row) * CELL_SIZE

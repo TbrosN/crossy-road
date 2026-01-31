@@ -4,8 +4,8 @@ import random
 from crossy.config import (
     GRID_WIDTH, CAR_SPEED_MIN, CAR_SPEED_MAX,
     LOG_SPEED_MIN, LOG_SPEED_MAX,
-    CARS_PER_ROW, LOGS_PER_ROW,
-    COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE
+    CARS_PER_ROW, LOGS_PER_ROW, TREES_PER_ROW,
+    COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE, COLOR_TREE
 )
 
 
@@ -76,12 +76,33 @@ class Log(Obstacle):
         super().__init__(x, y, speed, direction, width=width, color=color)
 
 
+class Tree:
+    """A static tree obstacle on grass that blocks player movement."""
+
+    def __init__(self, x, y):
+        """
+        Initialize a tree at a fixed position.
+        
+        Args:
+            x: X position (grid coordinate)
+            y: Y position (grid coordinate)
+        """
+        self.x = x
+        self.y = y
+        self.color = COLOR_TREE
+
+    def get_grid_x(self):
+        """Get the grid x coordinate."""
+        return self.x
+
+
 class ObstacleManager:
     """Manages all obstacles in the game."""
 
     def __init__(self):
         """Initialize obstacle manager."""
         self.obstacles = []
+        self.trees = []
 
     def generate_for_row(self, row_y, terrain_type):
         """
@@ -91,10 +112,11 @@ class ObstacleManager:
             row_y: Y coordinate of the row
             terrain_type: Type of terrain for this row
         """
-        from crossy.config import TERRAIN_ROAD, TERRAIN_RIVER, COLOR_LOG
+        from crossy.config import TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, COLOR_LOG
         
         # Remove old obstacles for this row
         self.obstacles = [obs for obs in self.obstacles if obs.y != row_y]
+        self.trees = [tree for tree in self.trees if tree.y != row_y]
         
         if terrain_type == TERRAIN_ROAD:
             # Generate cars
@@ -127,6 +149,17 @@ class ObstacleManager:
                 
                 log = Log(x, row_y, speed, direction, COLOR_LOG)
                 self.obstacles.append(log)
+        
+        elif terrain_type == TERRAIN_GRASS:
+            # Generate trees
+            num_trees = random.randint(*TREES_PER_ROW)
+            
+            if num_trees > 0:
+                # Generate random positions for trees (avoid duplicates)
+                positions = random.sample(range(GRID_WIDTH), num_trees)
+                for x in positions:
+                    tree = Tree(x, row_y)
+                    self.trees.append(tree)
 
     def update(self, dt):
         """
@@ -208,9 +241,26 @@ class ObstacleManager:
                     return obstacle
         return None
 
+    def has_tree_at(self, grid_x, grid_y):
+        """
+        Check if there's a tree at a specific grid position.
+        
+        Args:
+            grid_x: X grid coordinate
+            grid_y: Y grid coordinate
+        
+        Returns:
+            bool: True if there's a tree at this position
+        """
+        for tree in self.trees:
+            if tree.x == grid_x and tree.y == grid_y:
+                return True
+        return False
+
     def clear(self):
         """Clear all obstacles."""
         self.obstacles.clear()
+        self.trees.clear()
 
     def reset(self):
         """Reset obstacle manager."""

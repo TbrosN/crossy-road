@@ -30,6 +30,7 @@ COLOR_CAR_RED = (220, 20, 60)
 COLOR_CAR_BLUE = (65, 105, 225)
 COLOR_CAR_ORANGE = (255, 140, 0)
 COLOR_LOG = (139, 69, 19)
+COLOR_TREE = (34, 100, 34)
 COLOR_TEXT = (255, 255, 255)
 
 # Obstacle settings
@@ -41,6 +42,7 @@ LOG_SPEED_MAX = 2.0
 # Spawn rates (per row)
 CARS_PER_ROW = (2, 5)  # Min, max
 LOGS_PER_ROW = (2, 3)  # Min, max (logs are wider now)
+TREES_PER_ROW = (0, 4)  # Min, max (trees block movement)
 
 # High score file
 HIGH_SCORE_FILE = "high_score.txt"

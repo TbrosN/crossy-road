@@ -49,7 +49,7 @@ class GameState:
     def _generate_initial_obstacles(self):
         """Generate obstacles for all initial terrain rows."""
         for i, row in enumerate(self.terrain_manager.rows):
-            if row.terrain_type in (TERRAIN_ROAD, TERRAIN_RIVER):
+            if row.terrain_type in (TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS):
                 self.obstacle_manager.generate_for_row(i, row.terrain_type)
 
     def start_game(self):
@@ -104,7 +104,17 @@ class GameState:
         """
         if self.state == self.STATE_PLAYING:
             from crossy.config import TOTAL_ROWS
-            self.player.move(dx, dy, GRID_WIDTH, TOTAL_ROWS)
+            
+            # Calculate the target position
+            target_x = int(self.player.x) + dx
+            target_y = int(self.player.y) + dy
+            
+            # Check if target position is within bounds
+            if 0 <= target_x < GRID_WIDTH and 0 <= target_y < TOTAL_ROWS:
+                # Check if there's a tree at the target position
+                if not self.obstacle_manager.has_tree_at(target_x, target_y):
+                    # No tree blocking, allow the move
+                    self.player.move(dx, dy, GRID_WIDTH, TOTAL_ROWS)
 
     def _game_over(self):
         """Handle game over."""
