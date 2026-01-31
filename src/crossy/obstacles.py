@@ -57,6 +57,18 @@ class Obstacle:
     def get_right_edge(self):
         """Get the right edge of the obstacle."""
         return self.x + self.width
+    
+    def get_collision_box(self):
+        """
+        Get the collision box.
+        Returns (left, top, right, bottom) in grid coordinates.
+        """
+        return (
+            self.x,
+            self.y,
+            self.x + self.width,
+            self.y + 1
+        )
 
 
 class Car(Obstacle):

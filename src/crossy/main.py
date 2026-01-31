@@ -6,7 +6,8 @@ from crossy.config import (
     GRID_WIDTH, GRID_HEIGHT,
     COLOR_BACKGROUND, COLOR_GRASS, COLOR_ROAD, COLOR_RIVER,
     COLOR_PLAYER, COLOR_TEXT, COLOR_TREE,
-    TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER
+    TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER,
+    DEBUG_HITBOX_COLOR
 )
 from crossy.game import GameState
 from crossy.obstacles import Car, Log, Tree
@@ -27,6 +28,7 @@ class Game:
         self.small_font = pygame.font.Font(None, 24)
         
         self.game_state = GameState()
+        self.debug_mode = False  # Toggle with 'D' key
 
     def handle_events(self):
         """Handle pygame events."""
@@ -48,6 +50,10 @@ class Game:
                         self.game_state.move_player(-1, 0)
                     elif event.key == pygame.K_RIGHT:
                         self.game_state.move_player(1, 0)
+                    elif event.key == pygame.K_d:
+                        # Toggle debug mode
+                        self.debug_mode = not self.debug_mode
+                        print(f"Debug mode: {'ON' if self.debug_mode else 'OFF'}")
                     elif event.key == pygame.K_ESCAPE:
                         self.running = False
                 
@@ -89,6 +95,7 @@ class Game:
             "Use ARROW KEYS to move",
             "Avoid cars, ride logs across rivers",
             "Trees block your path on grass",
+            "Press D to toggle debug hitboxes",
             "",
             "Press SPACE to start"
         ]
@@ -152,9 +159,6 @@ class Game:
                     int(obstacle.width * CELL_SIZE),
                     CELL_SIZE
                 )
-                
-                # Slightly smaller rect for visual separation
-                rect = rect.inflate(-4, -4)
                 pygame.draw.rect(self.screen, obstacle.color, rect)
         
         # Render trees
@@ -182,8 +186,11 @@ class Game:
             CELL_SIZE,
             CELL_SIZE
         )
-        player_rect = player_rect.inflate(-4, -4)
         pygame.draw.rect(self.screen, COLOR_PLAYER, player_rect)
+        
+        # Debug mode: render hitboxes
+        if self.debug_mode:
+            self._render_debug_hitboxes(offset_x, offset_y, camera_start_row, camera_end_row)
         
         # Render score
         score_text = self.font.render(
@@ -191,6 +198,62 @@ class Game:
             True, COLOR_TEXT
         )
         self.screen.blit(score_text, (10, 10))
+        
+        # Debug mode indicator
+        if self.debug_mode:
+            debug_text = self.small_font.render("DEBUG MODE", True, DEBUG_HITBOX_COLOR)
+            self.screen.blit(debug_text, (10, 50))
+
+    def _render_debug_hitboxes(self, offset_x, offset_y, camera_start_row, camera_end_row):
+        """
+        Render debug hitboxes for player and obstacles.
+        
+        Args:
+            offset_x: X offset for grid rendering
+            offset_y: Y offset for grid rendering
+            camera_start_row: First visible row
+            camera_end_row: Last visible row
+        """
+        # Draw player hitbox
+        player = self.game_state.player
+        if camera_start_row <= player.y < camera_end_row:
+            left, top, right, bottom = player.get_collision_box()
+            screen_y = (top - camera_start_row) * CELL_SIZE
+            
+            hitbox_rect = pygame.Rect(
+                offset_x + left * CELL_SIZE,
+                offset_y + screen_y,
+                (right - left) * CELL_SIZE,
+                (bottom - top) * CELL_SIZE
+            )
+            pygame.draw.rect(self.screen, DEBUG_HITBOX_COLOR, hitbox_rect, 2)
+        
+        # Draw obstacle hitboxes
+        for obstacle in self.game_state.obstacle_manager.obstacles:
+            if camera_start_row <= obstacle.y < camera_end_row:
+                left, top, right, bottom = obstacle.get_collision_box()
+                screen_y = (top - camera_start_row) * CELL_SIZE
+                
+                hitbox_rect = pygame.Rect(
+                    offset_x + left * CELL_SIZE,
+                    offset_y + screen_y,
+                    (right - left) * CELL_SIZE,
+                    (bottom - top) * CELL_SIZE
+                )
+                pygame.draw.rect(self.screen, DEBUG_HITBOX_COLOR, hitbox_rect, 2)
+        
+        # Draw tree hitboxes (trees don't have collision margins)
+        for tree in self.game_state.obstacle_manager.trees:
+            if camera_start_row <= tree.y < camera_end_row:
+                screen_y = (tree.y - camera_start_row) * CELL_SIZE
+                
+                hitbox_rect = pygame.Rect(
+                    offset_x + tree.x * CELL_SIZE,
+                    offset_y + screen_y,
+                    CELL_SIZE,
+                    CELL_SIZE
+                )
+                pygame.draw.rect(self.screen, DEBUG_HITBOX_COLOR, hitbox_rect, 2)
 
     def _render_game_over(self):
         """Render the game over screen."""

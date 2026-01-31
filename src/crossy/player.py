@@ -51,3 +51,15 @@ class Player:
         self.x = float(PLAYER_START_X)
         self.y = PLAYER_START_Y
         self.max_row = PLAYER_START_Y
+    
+    def get_collision_box(self):
+        """
+        Get the collision box.
+        Returns (left, top, right, bottom) in grid coordinates.
+        """
+        return (
+            self.x,
+            self.y,
+            self.x + 1,
+            self.y + 1
+        )

@@ -46,3 +46,7 @@ TREES_PER_ROW = (0, 4)  # Min, max (trees block movement)
 
 # High score file
 HIGH_SCORE_FILE = "high_score.txt"
+
+# Debug settings
+DEBUG_MODE = False  # Toggle with 'D' key during gameplay
+DEBUG_HITBOX_COLOR = (255, 0, 255)  # Magenta for hitbox outlines
