@@ -3,7 +3,7 @@
 import os
 from crossy.config import (
     GRID_WIDTH, GRID_HEIGHT, HIGH_SCORE_FILE,
-    TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS
+    TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, SCROLL_SPEED
 )
 from crossy.player import Player
 from crossy.terrain import TerrainManager
@@ -24,6 +24,7 @@ class GameState:
         self.terrain_manager = TerrainManager()
         self.obstacle_manager = ObstacleManager()
         self.high_score = self._load_high_score()
+        self.scroll_y = 0.0  # Current scroll position (in rows)
         
         # Generate initial obstacles
         self._generate_initial_obstacles()
@@ -58,6 +59,7 @@ class GameState:
         self.player.reset()
         self.terrain_manager.reset()
         self.obstacle_manager.reset()
+        self.scroll_y = float(self.player.y - GRID_HEIGHT + 3)  # Start scroll a bit below player
         self._generate_initial_obstacles()
 
     def update(self, dt):
@@ -68,6 +70,15 @@ class GameState:
             dt: Delta time in seconds
         """
         if self.state != self.STATE_PLAYING:
+            return
+
+        # Auto-scroll upward over time
+        self.scroll_y -= SCROLL_SPEED * dt  # Negative because lower y = further up
+        
+        # Check if player has scrolled off the bottom of the screen
+        scroll_bottom = self.scroll_y + GRID_HEIGHT
+        if self.player.y >= scroll_bottom:
+            self._game_over()
             return
 
         # Update obstacles

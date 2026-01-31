@@ -95,6 +95,7 @@ class Game:
             "Use ARROW KEYS to move",
             "Avoid cars, ride logs across rivers",
             "Trees block your path on grass",
+            "Screen auto-scrolls - don't fall behind!",
             "Press D to toggle debug hitboxes",
             "",
             "Press SPACE to start"
@@ -121,19 +122,21 @@ class Game:
         offset_x = (WINDOW_WIDTH - GRID_WIDTH * CELL_SIZE) // 2
         offset_y = (WINDOW_HEIGHT - GRID_HEIGHT * CELL_SIZE) // 2
         
-        # Calculate which rows to render (centered on player)
-        player_y = self.game_state.player.y
-        camera_start_row = max(0, player_y - GRID_HEIGHT // 2)
-        camera_end_row = min(len(self.game_state.terrain_manager.rows), camera_start_row + GRID_HEIGHT)
+        # Calculate which rows to render based on scroll position
+        scroll_y = self.game_state.scroll_y
+        # Render one extra row at top and bottom to handle fractional scroll positions
+        camera_start_row = int(scroll_y)
+        camera_end_row = camera_start_row + GRID_HEIGHT + 1  # +1 for partial row at bottom
         
-        # Adjust camera if near edges
-        if camera_end_row - camera_start_row < GRID_HEIGHT:
-            camera_start_row = max(0, camera_end_row - GRID_HEIGHT)
+        # Clamp to valid range
+        camera_start_row = max(0, camera_start_row)
+        camera_end_row = min(len(self.game_state.terrain_manager.rows), camera_end_row)
         
-        # Render terrain
+        # Render terrain (with smooth scrolling)
+        scroll_y = self.game_state.scroll_y
         for i in range(camera_start_row, camera_end_row):
             row = self.game_state.terrain_manager.rows[i]
-            screen_y = (i - camera_start_row) * CELL_SIZE
+            screen_y = (i - scroll_y) * CELL_SIZE
             
             color = COLOR_GRASS
             if row.terrain_type == TERRAIN_ROAD:
@@ -149,10 +152,10 @@ class Game:
             )
             pygame.draw.rect(self.screen, color, rect)
         
-        # Render obstacles
+        # Render obstacles (with smooth scrolling)
         for obstacle in self.game_state.obstacle_manager.obstacles:
             if camera_start_row <= obstacle.y < camera_end_row:
-                screen_y = (obstacle.y - camera_start_row) * CELL_SIZE
+                screen_y = (obstacle.y - scroll_y) * CELL_SIZE
                 rect = pygame.Rect(
                     offset_x + int(obstacle.x * CELL_SIZE),
                     offset_y + screen_y,
@@ -161,10 +164,10 @@ class Game:
                 )
                 pygame.draw.rect(self.screen, obstacle.color, rect)
         
-        # Render trees
+        # Render trees (with smooth scrolling)
         for tree in self.game_state.obstacle_manager.trees:
             if camera_start_row <= tree.y < camera_end_row:
-                screen_y = (tree.y - camera_start_row) * CELL_SIZE
+                screen_y = (tree.y - scroll_y) * CELL_SIZE
                 rect = pygame.Rect(
                     offset_x + tree.x * CELL_SIZE,
                     offset_y + screen_y,
@@ -178,8 +181,9 @@ class Game:
                 radius = CELL_SIZE // 3
                 pygame.draw.circle(self.screen, tree.color, (center_x, center_y), radius)
         
-        # Render player
-        screen_y = (self.game_state.player.y - camera_start_row) * CELL_SIZE
+        # Render player (with smooth scrolling)
+        scroll_y = self.game_state.scroll_y
+        screen_y = (self.game_state.player.y - scroll_y) * CELL_SIZE
         player_rect = pygame.Rect(
             offset_x + self.game_state.player.x * CELL_SIZE,
             offset_y + screen_y,
@@ -214,11 +218,13 @@ class Game:
             camera_start_row: First visible row
             camera_end_row: Last visible row
         """
+        scroll_y = self.game_state.scroll_y
+        
         # Draw player hitbox
         player = self.game_state.player
         if camera_start_row <= player.y < camera_end_row:
             left, top, right, bottom = player.get_collision_box()
-            screen_y = (top - camera_start_row) * CELL_SIZE
+            screen_y = (top - scroll_y) * CELL_SIZE
             
             hitbox_rect = pygame.Rect(
                 offset_x + left * CELL_SIZE,
@@ -232,7 +238,7 @@ class Game:
         for obstacle in self.game_state.obstacle_manager.obstacles:
             if camera_start_row <= obstacle.y < camera_end_row:
                 left, top, right, bottom = obstacle.get_collision_box()
-                screen_y = (top - camera_start_row) * CELL_SIZE
+                screen_y = (top - scroll_y) * CELL_SIZE
                 
                 hitbox_rect = pygame.Rect(
                     offset_x + left * CELL_SIZE,
@@ -242,10 +248,10 @@ class Game:
                 )
                 pygame.draw.rect(self.screen, DEBUG_HITBOX_COLOR, hitbox_rect, 2)
         
-        # Draw tree hitboxes (trees don't have collision margins)
+        # Draw tree hitboxes
         for tree in self.game_state.obstacle_manager.trees:
             if camera_start_row <= tree.y < camera_end_row:
-                screen_y = (tree.y - camera_start_row) * CELL_SIZE
+                screen_y = (tree.y - scroll_y) * CELL_SIZE
                 
                 hitbox_rect = pygame.Rect(
                     offset_x + tree.x * CELL_SIZE,
