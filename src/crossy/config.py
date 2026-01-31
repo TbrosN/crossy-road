@@ -14,7 +14,9 @@ TOTAL_ROWS = 100  # Total rows in the game world
 # Game settings
 PLAYER_START_X = GRID_WIDTH // 2
 PLAYER_START_Y = TOTAL_ROWS - 3  # Start near the bottom of the world
-SCROLL_SPEED = 1.0  # Rows per second that the screen auto-scrolls upward
+SCROLL_SPEED = 0.5  # Rows per second that the screen auto-scrolls upward
+SCROLL_THRESHOLD = 0.75  # Player position threshold (0.75 = 1/4 from bottom, 3/4 from top)
+SCROLL_CATCHUP_SPEED = 3.0  # Extra scroll speed when player is above threshold
 
 # Terrain generation
 TERRAIN_GRASS = "grass"

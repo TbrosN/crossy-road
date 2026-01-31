@@ -3,7 +3,8 @@
 import os
 from crossy.config import (
     GRID_WIDTH, GRID_HEIGHT, HIGH_SCORE_FILE,
-    TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, TERRAIN_TRAIN, SCROLL_SPEED
+    TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, TERRAIN_TRAIN, 
+    SCROLL_SPEED, SCROLL_THRESHOLD, SCROLL_CATCHUP_SPEED
 )
 from crossy.player import Player
 from crossy.terrain import TerrainManager
@@ -74,6 +75,14 @@ class GameState:
 
         # Auto-scroll upward over time
         self.scroll_y -= SCROLL_SPEED * dt  # Negative because lower y = further up
+        
+        # Dynamic catch-up scrolling: if player is above threshold, scroll faster
+        player_screen_y = self.player.y - self.scroll_y  # Player's position in screen space
+        threshold_y = GRID_HEIGHT * SCROLL_THRESHOLD  # Threshold position (3/4 down from top)
+        
+        if player_screen_y < threshold_y:
+            # Player is above threshold (too high on screen), apply catch-up scrolling
+            self.scroll_y -= SCROLL_CATCHUP_SPEED * dt
         
         # Check if player has scrolled off the bottom of the screen
         scroll_bottom = self.scroll_y + GRID_HEIGHT
