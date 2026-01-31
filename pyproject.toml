@@ -1,0 +1,18 @@
+[project]
+name = "crossy-road"
+version = "0.1.0"
+description = "A Crossy Road clone"
+requires-python = ">=3.11"
+dependencies = [
+    "pygame-ce>=2.4.1",
+]
+
+[project.scripts]
+crossy = "crossy.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crossy"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
