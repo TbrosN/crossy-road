@@ -5,7 +5,9 @@ from crossy.config import (
     GRID_WIDTH, CAR_SPEED_MIN, CAR_SPEED_MAX,
     LOG_SPEED_MIN, LOG_SPEED_MAX,
     CARS_PER_ROW, LOGS_PER_ROW, TREES_PER_ROW,
-    COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE, COLOR_TREE
+    COLOR_CAR_RED, COLOR_CAR_BLUE, COLOR_CAR_ORANGE, COLOR_TREE,
+    TRAIN_SPEED, TRAIN_WIDTH, TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX,
+    TRAIN_WARNING_TIME, COLOR_TRAIN
 )
 
 
@@ -108,6 +110,97 @@ class Tree:
         return self.x
 
 
+class Train(Obstacle):
+    """A train obstacle that covers the entire track."""
+
+    def __init__(self, x, y, direction):
+        """Initialize a train with direction."""
+        super().__init__(x, y, TRAIN_SPEED, direction, width=TRAIN_WIDTH, color=COLOR_TRAIN)
+
+
+class TrainTrack:
+    """Manages train spawning for a single train track row."""
+
+    def __init__(self, row_y):
+        """
+        Initialize a train track.
+        
+        Args:
+            row_y: Y coordinate of this train track
+        """
+        self.row_y = row_y
+        self.direction = random.choice([-1, 1])  # Train direction
+        self.train = None  # Current active train (if any)
+        
+        # Randomize initial state to make tracks feel independent
+        # 30% chance: spawn a train immediately (already on track)
+        # 30% chance: show warning (train coming soon)
+        # 40% chance: normal random interval
+        roll = random.random()
+        if roll < 0.3:
+            # Spawn train immediately at a random position on the track
+            if self.direction > 0:
+                x = random.uniform(-TRAIN_WIDTH, GRID_WIDTH * 0.3)
+            else:
+                x = random.uniform(GRID_WIDTH * 0.7, GRID_WIDTH + TRAIN_WIDTH)
+            self.train = Train(x, row_y, self.direction)
+            self.time_until_next_train = random.uniform(TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX)
+            self.warning = False
+        elif roll < 0.6:
+            # Start with warning active (train coming very soon)
+            self.time_until_next_train = random.uniform(0.5, TRAIN_WARNING_TIME)
+            self.warning = True
+        else:
+            # Normal random interval
+            self.time_until_next_train = random.uniform(TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX)
+            self.warning = False
+
+    def update(self, dt):
+        """
+        Update train track state.
+        
+        Args:
+            dt: Delta time in seconds
+        
+        Returns:
+            Train or None: New train if spawned, None otherwise
+        """
+        # If there's an active train and it's off screen, remove it
+        if self.train is not None:
+            if (self.direction > 0 and self.train.x > GRID_WIDTH + TRAIN_WIDTH) or \
+               (self.direction < 0 and self.train.x < -TRAIN_WIDTH):
+                self.train = None
+                # Schedule next train
+                self.time_until_next_train = random.uniform(TRAIN_SPAWN_INTERVAL_MIN, TRAIN_SPAWN_INTERVAL_MAX)
+                self.warning = False
+        
+        # If no train, count down to next spawn
+        if self.train is None:
+            self.time_until_next_train -= dt
+            
+            # Show warning when close to spawn time
+            if self.time_until_next_train <= TRAIN_WARNING_TIME and not self.warning:
+                self.warning = True
+            
+            # Spawn train when timer reaches zero
+            if self.time_until_next_train <= 0:
+                # Spawn train off screen on the appropriate side
+                if self.direction > 0:
+                    x = -TRAIN_WIDTH
+                else:
+                    x = GRID_WIDTH + TRAIN_WIDTH
+                
+                self.train = Train(x, self.row_y, self.direction)
+                self.warning = False
+                return self.train
+        
+        return None
+
+    def get_train(self):
+        """Get the current active train (if any)."""
+        return self.train
+
+
 class ObstacleManager:
     """Manages all obstacles in the game."""
 
@@ -115,6 +208,7 @@ class ObstacleManager:
         """Initialize obstacle manager."""
         self.obstacles = []
         self.trees = []
+        self.train_tracks = {}  # Maps row_y to TrainTrack object
 
     def generate_for_row(self, row_y, terrain_type):
         """
@@ -124,11 +218,15 @@ class ObstacleManager:
             row_y: Y coordinate of the row
             terrain_type: Type of terrain for this row
         """
-        from crossy.config import TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, COLOR_LOG
+        from crossy.config import TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, TERRAIN_TRAIN, COLOR_LOG
         
         # Remove old obstacles for this row
         self.obstacles = [obs for obs in self.obstacles if obs.y != row_y]
         self.trees = [tree for tree in self.trees if tree.y != row_y]
+        
+        # Remove old train track for this row if it exists
+        if row_y in self.train_tracks:
+            del self.train_tracks[row_y]
         
         if terrain_type == TERRAIN_ROAD:
             # Generate cars
@@ -172,6 +270,15 @@ class ObstacleManager:
                 for x in positions:
                     tree = Tree(x, row_y)
                     self.trees.append(tree)
+        
+        elif terrain_type == TERRAIN_TRAIN:
+            # Create a train track for this row
+            train_track = TrainTrack(row_y)
+            self.train_tracks[row_y] = train_track
+            
+            # If the train track already has a train, add it to obstacles
+            if train_track.train is not None:
+                self.obstacles.append(train_track.train)
 
     def update(self, dt):
         """
@@ -182,6 +289,12 @@ class ObstacleManager:
         """
         for obstacle in self.obstacles:
             obstacle.update(dt)
+        
+        # Update train tracks and spawn trains
+        for train_track in list(self.train_tracks.values()):
+            new_train = train_track.update(dt)
+            if new_train is not None:
+                self.obstacles.append(new_train)
 
     def get_obstacles_at(self, grid_y):
         """
@@ -218,6 +331,45 @@ class ObstacleManager:
                 # Check for overlap
                 if player_left < car_right and player_right > car_left:
                     return True
+        return False
+
+    def check_collision_with_train(self, player_x, player_y):
+        """
+        Check if player collides with any train.
+        
+        Args:
+            player_x: Player X position (float, can be between cells)
+            player_y: Player Y position
+        
+        Returns:
+            bool: True if collision detected
+        """
+        # Player occupies 1 cell width
+        player_left = player_x
+        player_right = player_x + 1
+        
+        for obstacle in self.obstacles:
+            if isinstance(obstacle, Train) and obstacle.y == player_y:
+                train_left = obstacle.get_left_edge()
+                train_right = obstacle.get_right_edge()
+                
+                # Check for overlap
+                if player_left < train_right and player_right > train_left:
+                    return True
+        return False
+
+    def is_train_warning(self, grid_y):
+        """
+        Check if there's a train warning for a specific row.
+        
+        Args:
+            grid_y: Y coordinate
+        
+        Returns:
+            bool: True if train warning is active
+        """
+        if grid_y in self.train_tracks:
+            return self.train_tracks[grid_y].warning
         return False
 
     def get_log_at_position(self, player_x, player_y):
@@ -273,6 +425,7 @@ class ObstacleManager:
         """Clear all obstacles."""
         self.obstacles.clear()
         self.trees.clear()
+        self.train_tracks.clear()
 
     def reset(self):
         """Reset obstacle manager."""

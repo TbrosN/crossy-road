@@ -2,7 +2,7 @@
 
 import random
 from crossy.config import (
-    TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER,
+    TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_TRAIN,
     GRID_WIDTH, TOTAL_ROWS
 )
 
@@ -35,10 +35,12 @@ class TerrainManager:
         roll = random.random()
         if roll < 0.3:
             return TERRAIN_GRASS
-        elif roll < 0.65:
+        elif roll < 0.55:
             return TERRAIN_ROAD
-        else:
+        elif roll < 0.80:
             return TERRAIN_RIVER
+        else:
+            return TERRAIN_TRAIN
 
     def _generate_terrain(self):
         """Generate all terrain rows upfront."""

@@ -3,7 +3,7 @@
 import os
 from crossy.config import (
     GRID_WIDTH, GRID_HEIGHT, HIGH_SCORE_FILE,
-    TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, SCROLL_SPEED
+    TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, TERRAIN_TRAIN, SCROLL_SPEED
 )
 from crossy.player import Player
 from crossy.terrain import TerrainManager
@@ -50,7 +50,7 @@ class GameState:
     def _generate_initial_obstacles(self):
         """Generate obstacles for all initial terrain rows."""
         for i, row in enumerate(self.terrain_manager.rows):
-            if row.terrain_type in (TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS):
+            if row.terrain_type in (TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_GRASS, TERRAIN_TRAIN):
                 self.obstacle_manager.generate_for_row(i, row.terrain_type)
 
     def start_game(self):
@@ -103,6 +103,11 @@ class GameState:
         # Check collision with cars
         if current_terrain == TERRAIN_ROAD:
             if self.obstacle_manager.check_collision_with_car(self.player.x, self.player.y):
+                self._game_over()
+        
+        # Check collision with trains
+        if current_terrain == TERRAIN_TRAIN:
+            if self.obstacle_manager.check_collision_with_train(self.player.x, self.player.y):
                 self._game_over()
 
     def move_player(self, dx, dy):

@@ -4,13 +4,13 @@ import pygame
 from crossy.config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, FPS, CELL_SIZE,
     GRID_WIDTH, GRID_HEIGHT,
-    COLOR_BACKGROUND, COLOR_GRASS, COLOR_ROAD, COLOR_RIVER,
+    COLOR_BACKGROUND, COLOR_GRASS, COLOR_ROAD, COLOR_RIVER, COLOR_TRAIN_TRACK,
     COLOR_PLAYER, COLOR_TEXT, COLOR_TREE,
-    TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER,
+    TERRAIN_GRASS, TERRAIN_ROAD, TERRAIN_RIVER, TERRAIN_TRAIN,
     DEBUG_HITBOX_COLOR
 )
 from crossy.game import GameState
-from crossy.obstacles import Car, Log, Tree
+from crossy.obstacles import Car, Log, Tree, Train
 
 
 class Game:
@@ -95,6 +95,7 @@ class Game:
             "Use ARROW KEYS to move",
             "Avoid cars, ride logs across rivers",
             "Trees block your path on grass",
+            "Watch for trains on tracks - they're fast!",
             "Screen auto-scrolls - don't fall behind!",
             "Press D to toggle debug hitboxes",
             "",
@@ -143,6 +144,8 @@ class Game:
                 color = COLOR_ROAD
             elif row.terrain_type == TERRAIN_RIVER:
                 color = COLOR_RIVER
+            elif row.terrain_type == TERRAIN_TRAIN:
+                color = COLOR_TRAIN_TRACK
             
             rect = pygame.Rect(
                 offset_x,
@@ -151,6 +154,35 @@ class Game:
                 CELL_SIZE
             )
             pygame.draw.rect(self.screen, color, rect)
+            
+            # Draw train track rails if this is a train row
+            if row.terrain_type == TERRAIN_TRAIN:
+                rail_color = (100, 80, 60)  # Slightly lighter brown for rails
+                rail_y1 = offset_y + screen_y + CELL_SIZE // 3
+                rail_y2 = offset_y + screen_y + 2 * CELL_SIZE // 3
+                rail_height = 3
+                
+                # Two horizontal rails
+                pygame.draw.rect(
+                    self.screen, 
+                    rail_color,
+                    pygame.Rect(offset_x, rail_y1, GRID_WIDTH * CELL_SIZE, rail_height)
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    rail_color,
+                    pygame.Rect(offset_x, rail_y2, GRID_WIDTH * CELL_SIZE, rail_height)
+                )
+                
+                # Check if there's a train warning for this row
+                if self.game_state.obstacle_manager.is_train_warning(i):
+                    # Flash warning color
+                    import time
+                    if int(time.time() * 4) % 2 == 0:  # Flash at 2Hz
+                        warning_overlay = pygame.Surface((GRID_WIDTH * CELL_SIZE, CELL_SIZE))
+                        warning_overlay.set_alpha(60)
+                        warning_overlay.fill((255, 0, 0))
+                        self.screen.blit(warning_overlay, (offset_x, offset_y + screen_y))
         
         # Render obstacles (with smooth scrolling)
         for obstacle in self.game_state.obstacle_manager.obstacles:
